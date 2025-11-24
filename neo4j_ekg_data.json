@@ -1,0 +1,759 @@
+{
+  "application": {
+    "name": "ics_shopping_cart",
+    "type": "Application"
+  },
+  "services": [
+    {
+      "name": "product-reviews",
+      "type": "Service",
+      "language": "python",
+      "frameworks": [],
+      "dependencies": [
+        "grpcio-health-checking",
+        "openfeature-hooks-opentelemetry",
+        "openfeature-provider-flagd",
+        "opentelemetry-distro",
+        "opentelemetry-exporter-otlp-proto-grpc",
+        "psutil",
+        "python-dotenv",
+        "python-json-logger",
+        "psycopg2-binary",
+        "openai"
+      ],
+      "repository_path": "ics_shopping_cart/src/product-reviews"
+    },
+    {
+      "name": "cart",
+      "type": "Service",
+      "language": "csharp",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/cart"
+    },
+    {
+      "name": "prometheus",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/prometheus"
+    },
+    {
+      "name": "email",
+      "type": "Service",
+      "language": "ruby",
+      "frameworks": [
+        "sinatra"
+      ],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/email"
+    },
+    {
+      "name": "currency",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/currency"
+    },
+    {
+      "name": "flagd",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/flagd"
+    },
+    {
+      "name": "flagd-ui",
+      "type": "Service",
+      "language": "javascript",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/flagd-ui"
+    },
+    {
+      "name": "fraud-detection",
+      "type": "Service",
+      "language": "java",
+      "frameworks": [
+        "grpc",
+        "protobuf"
+      ],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/fraud-detection",
+      "java_version": "17"
+    },
+    {
+      "name": "quote",
+      "type": "Service",
+      "language": "php",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/quote"
+    },
+    {
+      "name": "payment",
+      "type": "Service",
+      "language": "javascript",
+      "frameworks": [],
+      "dependencies": [
+        "@grpc/grpc-js",
+        "@grpc/proto-loader",
+        "@openfeature/flagd-provider",
+        "@openfeature/server-sdk",
+        "@opentelemetry/api",
+        "@opentelemetry/auto-instrumentations-node",
+        "@opentelemetry/core",
+        "@opentelemetry/exporter-metrics-otlp-grpc",
+        "@opentelemetry/exporter-trace-otlp-grpc",
+        "@opentelemetry/instrumentation-runtime-node"
+      ],
+      "repository_path": "ics_shopping_cart/src/payment"
+    },
+    {
+      "name": "llm",
+      "type": "Service",
+      "language": "python",
+      "frameworks": [
+        "flask"
+      ],
+      "dependencies": [
+        "python-dotenv",
+        "python-json-logger",
+        "flask",
+        "openfeature-provider-flagd"
+      ],
+      "repository_path": "ics_shopping_cart/src/llm"
+    },
+    {
+      "name": "recommendation",
+      "type": "Service",
+      "language": "python",
+      "frameworks": [],
+      "dependencies": [
+        "grpcio-health-checking",
+        "openfeature-hooks-opentelemetry",
+        "openfeature-provider-flagd",
+        "opentelemetry-distro",
+        "opentelemetry-exporter-otlp-proto-grpc",
+        "psutil",
+        "python-dotenv",
+        "python-json-logger"
+      ],
+      "repository_path": "ics_shopping_cart/src/recommendation"
+    },
+    {
+      "name": "grafana",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/grafana"
+    },
+    {
+      "name": "image-provider",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/image-provider"
+    },
+    {
+      "name": "kafka",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/kafka"
+    },
+    {
+      "name": "product-catalog",
+      "type": "Service",
+      "language": "go",
+      "frameworks": [],
+      "dependencies": [
+        "github.com/open-feature/go-sdk",
+        "github.com/open-feature/go-sdk-contrib/hooks/open-telemetry",
+        "github.com/open-feature/go-sdk-contrib/providers/flagd",
+        "go.opentelemetry.io/contrib/bridges/otelslog",
+        "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+        "go.opentelemetry.io/contrib/instrumentation/runtime",
+        "go.opentelemetry.io/otel",
+        "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc",
+        "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc",
+        "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+      ],
+      "repository_path": "ics_shopping_cart/src/product-catalog"
+    },
+    {
+      "name": "jaeger",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/jaeger"
+    },
+    {
+      "name": "accounting",
+      "type": "Service",
+      "language": "csharp",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/accounting"
+    },
+    {
+      "name": "frontend-proxy",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/frontend-proxy"
+    },
+    {
+      "name": "frontend",
+      "type": "Service",
+      "language": "javascript",
+      "frameworks": [
+        "react",
+        "nextjs"
+      ],
+      "dependencies": [
+        "@bufbuild/protobuf",
+        "@grpc/grpc-js",
+        "@openfeature/flagd-provider",
+        "@openfeature/flagd-web-provider",
+        "@openfeature/react-sdk",
+        "@opentelemetry/api",
+        "@opentelemetry/auto-instrumentations-node",
+        "@opentelemetry/auto-instrumentations-web",
+        "@opentelemetry/context-zone",
+        "@opentelemetry/core"
+      ],
+      "repository_path": "ics_shopping_cart/src/frontend"
+    },
+    {
+      "name": "checkout",
+      "type": "Service",
+      "language": "go",
+      "frameworks": [],
+      "dependencies": [
+        "github.com/IBM/sarama",
+        "github.com/google/uuid",
+        "github.com/open-feature/go-sdk",
+        "github.com/open-feature/go-sdk-contrib/hooks/open-telemetry",
+        "github.com/open-feature/go-sdk-contrib/providers/flagd",
+        "go.opentelemetry.io/contrib/bridges/otelslog",
+        "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc",
+        "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+        "go.opentelemetry.io/contrib/instrumentation/runtime",
+        "go.opentelemetry.io/otel"
+      ],
+      "repository_path": "ics_shopping_cart/src/checkout"
+    },
+    {
+      "name": "load-generator",
+      "type": "Service",
+      "language": "python",
+      "frameworks": [
+        "flask"
+      ],
+      "dependencies": [
+        "Flask",
+        "locust-plugins[playwright]",
+        "python-json-logger",
+        "openfeature-provider-ofrep",
+        "openfeature-hooks-opentelemetry",
+        "opentelemetry-api",
+        "opentelemetry-exporter-otlp-proto-grpc",
+        "opentelemetry-instrumentation-jinja2",
+        "opentelemetry-instrumentation-requests",
+        "opentelemetry-instrumentation-system-metrics"
+      ],
+      "repository_path": "ics_shopping_cart/src/load-generator"
+    },
+    {
+      "name": "react-native-app",
+      "type": "Service",
+      "language": "javascript",
+      "frameworks": [
+        "react"
+      ],
+      "dependencies": [
+        "@expo/metro-config",
+        "@expo/vector-icons",
+        "@opentelemetry/api",
+        "@opentelemetry/core",
+        "@opentelemetry/exporter-trace-otlp-http",
+        "@opentelemetry/instrumentation",
+        "@opentelemetry/instrumentation-fetch",
+        "@opentelemetry/instrumentation-xml-http-request",
+        "@opentelemetry/resources",
+        "@opentelemetry/sdk-trace-base"
+      ],
+      "repository_path": "ics_shopping_cart/src/react-native-app"
+    },
+    {
+      "name": "ad",
+      "type": "Service",
+      "language": "java",
+      "frameworks": [
+        "grpc",
+        "protobuf"
+      ],
+      "dependencies": [
+        "proto-google-common-protos",
+        "opentelemetry-bom",
+        "opentelemetry-instrumentation-bom"
+      ],
+      "repository_path": "ics_shopping_cart/src/ad",
+      "java_version": "21.0"
+    },
+    {
+      "name": "otel-collector",
+      "type": "Service",
+      "language": "unknown",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/otel-collector"
+    },
+    {
+      "name": "shipping",
+      "type": "Service",
+      "language": "rust",
+      "frameworks": [],
+      "dependencies": [],
+      "repository_path": "ics_shopping_cart/src/shipping"
+    }
+  ],
+  "databases": [
+    {
+      "name": "opensearch",
+      "type": "DatabaseHost",
+      "repository_path": "ics_shopping_cart/src/opensearch"
+    },
+    {
+      "name": "postgres",
+      "type": "DatabaseHost",
+      "repository_path": "ics_shopping_cart/src/postgres"
+    }
+  ],
+  "apis": [
+    {
+      "service": "ad",
+      "protocol": "tcp",
+      "port": "9555",
+      "host": "ad",
+      "address": "ad:9555"
+    },
+    {
+      "service": "cart",
+      "protocol": "tcp",
+      "port": "7070",
+      "host": "cart",
+      "address": "cart:7070"
+    },
+    {
+      "service": "checkout",
+      "protocol": "tcp",
+      "port": "5050",
+      "host": "checkout",
+      "address": "checkout:5050"
+    },
+    {
+      "service": "currency",
+      "protocol": "tcp",
+      "port": "7001",
+      "host": "currency",
+      "address": "currency:7001"
+    },
+    {
+      "service": "email",
+      "protocol": "http",
+      "port": "6060",
+      "host": "email",
+      "address": "http://email:6060"
+    },
+    {
+      "service": "frontend",
+      "protocol": "tcp",
+      "port": "8080",
+      "host": "frontend",
+      "address": "frontend:8080"
+    },
+    {
+      "service": "envoy",
+      "protocol": "tcp",
+      "port": "8080",
+      "host": null,
+      "address": "0.0.0.0"
+    },
+    {
+      "service": "envoy_admin",
+      "protocol": "tcp",
+      "port": "10000",
+      "host": null,
+      "address": null
+    },
+    {
+      "service": "frontend_proxy",
+      "protocol": "tcp",
+      "port": null,
+      "host": "frontend-proxy",
+      "address": "frontend-proxy:8080"
+    },
+    {
+      "service": "image_provider",
+      "protocol": "tcp",
+      "port": "8081",
+      "host": "image-provider",
+      "address": null
+    },
+    {
+      "service": "locust_web",
+      "protocol": "tcp",
+      "port": "8089",
+      "host": "load-generator",
+      "address": null
+    },
+    {
+      "service": "payment",
+      "protocol": "tcp",
+      "port": "50051",
+      "host": "payment",
+      "address": "payment:50051"
+    },
+    {
+      "service": "product_catalog",
+      "protocol": "tcp",
+      "port": "3550",
+      "host": "product-catalog",
+      "address": "product-catalog:3550"
+    },
+    {
+      "service": "product_reviews",
+      "protocol": "tcp",
+      "port": "3551",
+      "host": "product-reviews",
+      "address": "product-reviews:3551"
+    },
+    {
+      "service": "quote",
+      "protocol": "http",
+      "port": "8090",
+      "host": "quote",
+      "address": "http://quote:8090"
+    },
+    {
+      "service": "recommendation",
+      "protocol": "tcp",
+      "port": "9001",
+      "host": "recommendation",
+      "address": "recommendation:9001"
+    },
+    {
+      "service": "shipping",
+      "protocol": "http",
+      "port": "50050",
+      "host": "shipping",
+      "address": "http://shipping:50050"
+    },
+    {
+      "service": "flagd",
+      "protocol": "tcp",
+      "port": "8013",
+      "host": "flagd",
+      "address": null
+    },
+    {
+      "service": "flagd_ofrep",
+      "protocol": "tcp",
+      "port": "8016",
+      "host": null,
+      "address": null
+    },
+    {
+      "service": "flagd_ui",
+      "protocol": "tcp",
+      "port": "4000",
+      "host": "flagd-ui",
+      "address": null
+    },
+    {
+      "service": "kafka",
+      "protocol": "tcp",
+      "port": "9092",
+      "host": "kafka",
+      "address": "kafka:9092"
+    },
+    {
+      "service": "llm",
+      "protocol": "tcp",
+      "port": "8000",
+      "host": "llm",
+      "address": null
+    },
+    {
+      "service": "valkey",
+      "protocol": "tcp",
+      "port": "6379",
+      "host": "valkey-cart",
+      "address": "valkey-cart:6379"
+    },
+    {
+      "service": "postgres",
+      "protocol": "tcp",
+      "port": "5432",
+      "host": "postgresql",
+      "address": null
+    },
+    {
+      "service": "grafana",
+      "protocol": "tcp",
+      "port": "3000",
+      "host": "grafana",
+      "address": null
+    },
+    {
+      "service": "jaeger_ui",
+      "protocol": "tcp",
+      "port": "16686",
+      "host": null,
+      "address": null
+    },
+    {
+      "service": "jaeger_grpc",
+      "protocol": "tcp",
+      "port": "4317",
+      "host": null,
+      "address": null
+    },
+    {
+      "service": "prometheus",
+      "protocol": "tcp",
+      "port": "9090",
+      "host": "prometheus",
+      "address": "prometheus:9090"
+    }
+  ],
+  "compose_edges": {
+    "accounting": [
+      "otel-collector",
+      "kafka"
+    ],
+    "ad": [
+      "otel-collector",
+      "flagd"
+    ],
+    "cart": [
+      "valkey-cart",
+      "otel-collector",
+      "flagd"
+    ],
+    "checkout": [
+      "cart",
+      "currency",
+      "email",
+      "payment",
+      "product-catalog",
+      "shipping",
+      "otel-collector",
+      "kafka",
+      "flagd"
+    ],
+    "currency": [
+      "otel-collector"
+    ],
+    "email": [
+      "otel-collector"
+    ],
+    "fraud-detection": [
+      "otel-collector",
+      "kafka"
+    ],
+    "frontend": [
+      "ad",
+      "cart",
+      "checkout",
+      "currency",
+      "product-catalog",
+      "quote",
+      "recommendation",
+      "shipping",
+      "otel-collector",
+      "image-provider",
+      "flagd"
+    ],
+    "frontend-proxy": [
+      "frontend",
+      "load-generator",
+      "jaeger",
+      "grafana",
+      "flagd-ui"
+    ],
+    "image-provider": [
+      "otel-collector"
+    ],
+    "load-generator": [
+      "frontend",
+      "flagd"
+    ],
+    "payment": [
+      "otel-collector",
+      "flagd"
+    ],
+    "product-catalog": [
+      "otel-collector",
+      "flagd"
+    ],
+    "product-reviews": [
+      "product-catalog",
+      "llm",
+      "postgresql",
+      "otel-collector"
+    ],
+    "quote": [
+      "otel-collector"
+    ],
+    "recommendation": [
+      "product-catalog",
+      "otel-collector",
+      "flagd"
+    ],
+    "shipping": [
+      "otel-collector"
+    ],
+    "flagd-ui": [
+      "otel-collector",
+      "flagd"
+    ],
+    "llm": [
+      "flagd"
+    ],
+    "otel-collector": [
+      "jaeger",
+      "opensearch"
+    ]
+  },
+  "test_edges": [
+    [
+      "shipping",
+      "currency"
+    ],
+    [
+      "product-reviews",
+      "ad"
+    ],
+    [
+      "tracetesting",
+      "otel-collector"
+    ],
+    [
+      "email",
+      "ad"
+    ],
+    [
+      "frontend",
+      "kafka"
+    ],
+    [
+      "frontend",
+      "ad"
+    ],
+    [
+      "frontend",
+      "checkout"
+    ],
+    [
+      "currency",
+      "ad"
+    ],
+    [
+      "payment",
+      "currency"
+    ],
+    [
+      "checkout",
+      "kafka"
+    ],
+    [
+      "checkout",
+      "ad"
+    ],
+    [
+      "shipping",
+      "ad"
+    ],
+    [
+      "frontend",
+      "email"
+    ],
+    [
+      "frontend",
+      "recommendation"
+    ],
+    [
+      "email",
+      "shipping"
+    ],
+    [
+      "frontend",
+      "cart"
+    ],
+    [
+      "email",
+      "currency"
+    ],
+    [
+      "checkout",
+      "email"
+    ],
+    [
+      "tracetesting",
+      "frontend"
+    ],
+    [
+      "payment",
+      "ad"
+    ],
+    [
+      "checkout",
+      "shipping"
+    ],
+    [
+      "recommendation",
+      "ad"
+    ],
+    [
+      "checkout",
+      "cart"
+    ],
+    [
+      "tracetesting",
+      "postgres"
+    ],
+    [
+      "product-catalog",
+      "ad"
+    ],
+    [
+      "checkout",
+      "currency"
+    ],
+    [
+      "cart",
+      "ad"
+    ],
+    [
+      "shipping",
+      "quote"
+    ]
+  ],
+  "postgres_tables": [
+    "accounting.\"order\"",
+    "accounting.shipping",
+    "accounting.orderitem",
+    "reviews.productreviews"
+  ]
+}

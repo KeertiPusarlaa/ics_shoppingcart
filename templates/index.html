@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EKG Query System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            padding: 30px;
+        }
+        
+        .query-section {
+            margin-bottom: 30px;
+        }
+        
+        .query-input {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        #queryInput {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        #queryInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .sample-queries {
+            margin-bottom: 20px;
+        }
+        
+        .sample-queries h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        
+        .sample-query {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 15px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        
+        .sample-query:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .results-section {
+            border-top: 2px solid #f0f0f0;
+            padding-top: 30px;
+        }
+        
+        .result-card {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .result-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .result-type {
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .cypher-query {
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .results-table th,
+        .results-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .results-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            background: #ffe6e6;
+            border: 1px solid #ff6b6b;
+            color: #d63031;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        
+        .context-info {
+            background: #e8f4fd;
+            border: 1px solid #74b9ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .context-info h4 {
+            color: #0984e3;
+            margin-bottom: 10px;
+        }
+        
+        .schema-element {
+            display: inline-block;
+            background: white;
+            border: 1px solid #74b9ff;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 15px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 EKG Query System</h1>
+            <p>Natural Language Interface for ICS Shopping Cart Knowledge Graph</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="query-section">
+                <div class="query-input">
+                    <input type="text" id="queryInput" placeholder="Ask anything about the ICS Shopping Cart architecture..." />
+                    <button class="btn" onclick="executeQuery()">🔍 Query</button>
+                </div>
+                
+                <div class="sample-queries">
+                    <h3>📋 Sample Queries:</h3>
+                    <div class="sample-query" onclick="fillQuery('Show me all services')">Show me all services</div>
+                    <div class="sample-query" onclick="fillQuery('Which services depend on databases?')">Which services depend on databases?</div>
+                    <div class="sample-query" onclick="fillQuery('Show me APIs exposed by services')">Show me APIs exposed by services</div>
+                    <div class="sample-query" onclick="fillQuery('Find services written in Go')">Find services written in Go</div>
+                    <div class="sample-query" onclick="fillQuery('What are the database schemas and tables?')">What are the database schemas and tables?</div>
+                </div>
+            </div>
+            
+            <div class="results-section" id="resultsSection" style="display:none;">
+                <div id="resultsContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function fillQuery(query) {
+            document.getElementById('queryInput').value = query;
+        }
+        
+        function executeQuery() {
+            const query = document.getElementById('queryInput').value.trim();
+            if (!query) {
+                alert('Please enter a query');
+                return;
+            }
+            
+            const btn = document.querySelector('.btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Processing...';
+            
+            document.getElementById('resultsSection').style.display = 'block';
+            document.getElementById('resultsContent').innerHTML = '<div class="loading">🔍 Processing your query...</div>';
+            
+            fetch('/api/query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: query })
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayResults(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('resultsContent').innerHTML = 
+                    '<div class="error">❌ Error: ' + error.message + '</div>';
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = '🔍 Query';
+            });
+        }
+        
+        function displayResults(data) {
+            let html = '';
+            
+            if (data.error) {
+                html = '<div class="error">❌ Error: ' + data.error + '</div>';
+            } else {
+                html += '<div class="result-card">';
+                html += '<div class="result-header">';
+                html += '<h3>📊 Query Results</h3>';
+                html += '<span class="result-type">' + (data.query_type || 'structural') + '</span>';
+                html += '</div>';
+                
+                html += '<p><strong>Query:</strong> ' + data.query + '</p>';
+                
+                if (data.cypher_generated) {
+                    html += '<div class="cypher-query">' + data.cypher_generated + '</div>';
+                }
+                
+                if (data.results && data.results.length > 0) {
+                    html += '<h4>Results (' + data.results.length + ' rows):</h4>';
+                    html += createResultsTable(data.results);
+                } else {
+                    html += '<p>No results found.</p>';
+                }
+                
+                if (data.similar_schema) {
+                    html += '<div class="context-info">';
+                    html += '<h4>🎯 Similar Schema Elements Used:</h4>';
+                    for (let schema of data.similar_schema.slice(0, 5)) {
+                        html += '<span class="schema-element">' + schema.name + ' (' + schema.element_type + ') - ' + schema.similarity.toFixed(3) + '</span>';
+                    }
+                    html += '</div>';
+                }
+                
+                html += '</div>';
+            }
+            
+            document.getElementById('resultsContent').innerHTML = html;
+        }
+        
+        function createResultsTable(results) {
+            if (results.length === 0) return '<p>No results found.</p>';
+            
+            const keys = Object.keys(results[0]);
+            let html = '<table class="results-table">';
+            
+            // Header
+            html += '<thead><tr>';
+            for (let key of keys) {
+                html += '<th>' + key + '</th>';
+            }
+            html += '</tr></thead>';
+            
+            // Body
+            html += '<tbody>';
+            for (let row of results.slice(0, 20)) { // Limit to 20 rows
+                html += '<tr>';
+                for (let key of keys) {
+                    html += '<td>' + (row[key] || '') + '</td>';
+                }
+                html += '</tr>';
+            }
+            html += '</tbody>';
+            
+            html += '</table>';
+            
+            if (results.length > 20) {
+                html += '<p><em>... and ' + (results.length - 20) + ' more rows</em></p>';
+            }
+            
+            return html;
+        }
+        
+        // Allow Enter key to submit query
+        document.getElementById('queryInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeQuery();
+            }
+        });
+        
+        // Check system status on load
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                console.log('System status:', data);
+            })
+            .catch(error => {
+                console.error('System status check failed:', error);
+            });
+    </script>
+</body>
+</html>
