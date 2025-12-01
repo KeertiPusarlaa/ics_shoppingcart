@@ -21,17 +21,19 @@ import traceback
 
 # Our enhanced generator
 from enhanced_llm_cypher_generator import EnhancedLLMCypherGenerator
+from migration_plan_generator import MigrationPlanGenerator
 
 app = Flask(__name__)
 # CORS disabled - install flask_cors if needed
 
-# Global generator instance
+# Global generator instances
 generator = None
+migration_planner = None
 
 
 def initialize_generator():
-    """Initialize the enhanced generator"""
-    global generator
+    """Initialize the enhanced generator and migration planner"""
+    global generator, migration_planner
     try:
         # Use environment variables or defaults
         openai_key = os.getenv("OPENAI_API_KEY")
@@ -42,6 +44,14 @@ def initialize_generator():
             openai_api_key=openai_key
         )
         print("✅ Enhanced LLM Cypher Generator initialized")
+        
+        try:
+            migration_planner = MigrationPlanGenerator()
+            print("✅ Migration Plan Generator initialized")
+        except Exception as e:
+            print(f"⚠️ Migration planner initialization failed: {e}")
+            migration_planner = None
+        
         return True
     except Exception as e:
         print(f"❌ Failed to initialize generator: {e}")
@@ -127,6 +137,62 @@ def migration_analysis():
         traceback.print_exc()
         return jsonify({
             "status": "error", 
+            "error": str(e)
+        }), 500
+
+
+@app.route('/migration-plan', methods=['POST'])
+def generate_migration_plan():
+    """Generate migration plan based on user query"""
+    try:
+        if not migration_planner:
+            return jsonify({"error": "Migration planner not initialized"}), 500
+        
+        data = request.get_json()
+        if not data or 'query' not in data:
+            return jsonify({"error": "Missing 'query' in request body"}), 400
+        
+        user_query = data['query']
+        
+        print(f"📋 Generating migration plan for: {user_query}")
+        
+        # Generate migration plan
+        migration_plan = migration_planner.generate_migration_plan(user_query)
+        
+        return jsonify({
+            "status": "success",
+            "query": user_query,
+            "migration_plan": {
+                "title": migration_plan.title,
+                "description": migration_plan.description,
+                "migration_type": migration_plan.migration_type.value,
+                "affected_services": migration_plan.affected_services,
+                "timeline": migration_plan.timeline,
+                "total_effort": migration_plan.total_estimated_effort,
+                "prerequisites": migration_plan.prerequisites,
+                "steps": [
+                    {
+                        "step": step.step_number,
+                        "title": step.title,
+                        "description": step.description,
+                        "category": step.category,
+                        "effort": step.estimated_effort,
+                        "dependencies": step.dependencies,
+                        "risks": step.risks,
+                        "validation": step.validation_criteria
+                    }
+                    for step in migration_plan.steps
+                ],
+                "risks_and_mitigations": migration_plan.risks_and_mitigations,
+                "success_metrics": migration_plan.success_metrics
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ Migration plan error: {e}")
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
             "error": str(e)
         }), 500
 
