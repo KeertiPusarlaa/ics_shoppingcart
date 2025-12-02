@@ -142,10 +142,7 @@ class LLMCypherGenerator:
         self.migration_pipeline = MigrationIntelligencePipeline(self.neo4j_driver, self.vector_store)
         
         # OpenAI setup
-        if openai_api_key:
-            openai.api_key = openai_api_key
-        else:
-            openai.api_key = os.getenv("OPENAI_API_KEY")
+        openai.api_key = os.getenv("OPENAI_API_KEY")
         
         # Migration planner
         self.migration_planner = None
@@ -172,21 +169,32 @@ class LLMCypherGenerator:
         print("Vector database setup complete!")
     
     def generate_cypher(self, natural_query: str) -> Dict[str, Any]:
-        """Enhanced generation with query refinement, user confirmation, and migration intelligence"""
+        """Enhanced generation with iterative query refinement and learning."""
 
-        # Refine the user query using the PromptRefinementAgent
-        refined_query = self.prompt_refinement_agent.refine_query(natural_query)
+        preserve_keywords = ["kafka"]  # Add terms to preserve
 
-        # Prompt the user for confirmation
-        print(f"Refined Query: \"{refined_query}\"")
-        confirmation = input("Does this match your intent? (yes/no): ").strip().lower()
+        while True:
+            # Fetch vector database context
+            vector_database_context = self._get_vector_database_context(natural_query)
 
-        if confirmation == "no":
+            # Refine the user query using the PromptRefinementAgent
+            refined_query = self.prompt_refinement_agent.refine_query(natural_query, vector_database_context, preserve_keywords)
+
+            # Prompt the user for confirmation
+            print(f"Refined Query: \"{refined_query}\"")
+            confirmation = input("Does this match your intent? (yes/no): ").strip().lower()
+
+            if confirmation == "yes":
+                # Save the final query to the database
+                self.prompt_refinement_agent.store_query(natural_query, refined_query)
+                break
+
             # Allow the user to provide corrections
-            refined_query = input("Please provide the correct query: ").strip()
+            user_feedback = input("Please provide the correct query or feedback: ").strip()
+            self.prompt_refinement_agent.store_feedback_and_refinement(natural_query, refined_query, user_feedback)
 
-        # Save the final query to the database
-        self.prompt_refinement_agent.store_query(natural_query, refined_query)
+            # Update the natural query for the next iteration
+            natural_query = user_feedback
 
         # Check if this is a migration planning query
         if self._is_migration_planning_query(refined_query):
@@ -390,42 +398,37 @@ Generate the Cypher query:"""
         return context
     
     def _call_openai_with_context(self, context: str, natural_query: str) -> str:
-        """Call OpenAI API with comprehensive context"""
-        
+        """Call OpenAI API with comprehensive context and handle errors gracefully."""
         try:
-            from openai import OpenAI
-            client = OpenAI()
-            
-            response = client.chat.completions.create(
-                model="gpt-4-turbo-preview",
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
                 messages=[
-                    {
-                        "role": "system",
-                        "content": context
-                    },
-                    {
-                        "role": "user", 
-                        "content": f"Generate Cypher for: {natural_query}"
-                    }
+                    {"role": "system", "content": context},
+                    {"role": "user", "content": f"Generate Cypher for: {natural_query}"}
                 ],
                 max_tokens=300,
                 temperature=0.1
             )
-            
+
             cypher_query = response.choices[0].message.content.strip()
-            
+
             # Clean up the response (remove code blocks if present)
             if cypher_query.startswith("```"):
                 cypher_query = cypher_query.split("\n", 1)[1]
             if cypher_query.endswith("```"):
                 cypher_query = cypher_query.rsplit("\n", 1)[0]
-                
+
             return cypher_query.strip()
-            
+
+        except openai.error.AuthenticationError:
+            print("OpenAI API error: Invalid API key. Please check your API key.")
+            return ""
+        except openai.error.RateLimitError:
+            print("OpenAI API error: Rate limit exceeded. Please try again later.")
+            return ""
         except Exception as e:
             print(f"OpenAI API error: {e}")
-            # Fallback to vector-based generation
-            return self._vector_based_cypher_generation(natural_query, [], [])
+            return ""
     
     def _vector_based_cypher_generation(self, query: str, schema_elements: List[Dict], query_patterns: List[Dict]) -> str:
         """Fallback: Generate Cypher using vector similarity patterns"""
@@ -582,6 +585,21 @@ Generate the migration-focused Cypher query:"""
             
         else:
             return "MATCH (s:Service)-[:PART_OF]->(a:Application) RETURN s.name, s.language"
+
+    def _get_vector_database_context(self, query: str) -> str:
+        """Fetch relevant context from the vector database."""
+        similar_schema = self.vector_store.search_similar_schema(query, top_k=5)
+        similar_queries = self.vector_store.search_similar_queries(query, top_k=3)
+
+        context = "\n## Similar Schema Elements:\n"
+        for schema in similar_schema:
+            context += f"- {schema['name']}: {schema['description']}\n"
+
+        context += "\n## Similar Query Patterns:\n"
+        for pattern in similar_queries:
+            context += f"- Query: {pattern['natural_query']}\n  Cypher: {pattern['cypher_query']}\n"
+
+        return context
 
     def close(self):
         """Close connections"""
