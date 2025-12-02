@@ -47,3 +47,11 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+# Additional environment variable files
+*.env
+*.env.*
+
+# Ignore sensitive keys and certificates
+*.key
+*.pem
+*.crt
