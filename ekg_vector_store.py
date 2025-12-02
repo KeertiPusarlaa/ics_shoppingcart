@@ -13,13 +13,24 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # Vector DB and embeddings imports
 from pymilvus import Collection, FieldSchema, CollectionSchema, DataType, connections, utility
-import openai
 from sentence_transformers import SentenceTransformer
 
 # Neo4j integration
 from neo4j import GraphDatabase
+
+from openai import OpenAI
+
+def get_openai_client():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY not set.")
+    return OpenAI(api_key=api_key)
+
 
 
 @dataclass

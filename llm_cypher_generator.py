@@ -15,36 +15,56 @@ import argparse
 from typing import List, Dict, Any
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()  # MUST load before anything else
+
+# Neo4j
+from neo4j import GraphDatabase
+
 # Our custom modules
 from ekg_vector_store import EKGVectorStore, EKGSchemaExtractor, create_default_query_patterns
 
-# LLM integration
-import openai
-from neo4j import GraphDatabase
+# OpenAI (NO top-level client creation!)
+from openai import OpenAI
+
+
+def get_openai_client():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY is missing. Add it to .env.")
+    return OpenAI(api_key=api_key)
+
 
 
 class LLMCypherGenerator:
     """Generates Cypher queries from natural language using LLM + Vector Search"""
     
     def __init__(self, 
-                 neo4j_uri: str = "neo4j://127.0.0.1:7687",
-                 neo4j_user: str = "neo4j", 
-                 neo4j_password: str = "icsneo4j",
-                 openai_api_key: str = None,
-                 milvus_host: str = "localhost",
-                 milvus_port: int = 19530):
+                 neo4j_uri: str = None,
+                 neo4j_user: str = None, 
+                 neo4j_password: str = None,
+                 milvus_host: str = None,
+                 milvus_port: int = None):
         
+        # Load from .env if not provided
+        neo4j_uri = neo4j_uri or os.getenv("NEO4J_URI", "neo4j://127.0.0.1:7687")
+        neo4j_user = neo4j_user or os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = neo4j_password or os.getenv("NEO4J_PASSWORD", "icsneo4j")
+        milvus_host = milvus_host or os.getenv("MILVUS_HOST", "localhost")
+        milvus_port = milvus_port or int(os.getenv("MILVUS_PORT", 19530))
+
         # Neo4j connection
         self.neo4j_driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
         
         # Vector store
         self.vector_store = EKGVectorStore(milvus_host, milvus_port)
         
-        # OpenAI setup
-        if openai_api_key:
-            openai.api_key = openai_api_key
-        else:
-            openai.api_key = os.getenv("OPENAI_API_KEY")
+        # OpenAI client — IMPORTANT: do NOT pass key manually
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if not openai_key:
+            raise ValueError("OPENAI_API_KEY not found. Please set it in .env")
+        
+        self.client = OpenAI(api_key=openai_key)
     
     def setup_vector_data(self):
         """Initialize vector database with schema and query patterns"""

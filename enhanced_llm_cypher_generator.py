@@ -20,7 +20,8 @@ from llm_cypher_generator import LLMCypherGenerator
 from ekg_vector_store import EKGVectorStore, EKGSchemaExtractor, create_default_query_patterns
 
 # LLM integration
-import openai
+from openai import OpenAI
+client = OpenAI()
 from neo4j import GraphDatabase
 
 
