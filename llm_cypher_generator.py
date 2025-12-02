@@ -20,7 +20,7 @@ from ekg_vector_store import EKGVectorStore, EKGSchemaExtractor, create_default_
 from prompt_refinement_agent import PromptRefinementAgent
 
 # LLM integration
-import openai
+from openai import OpenAI
 from neo4j import GraphDatabase
 
 # Migration planning
@@ -142,7 +142,7 @@ class LLMCypherGenerator:
         self.migration_pipeline = MigrationIntelligencePipeline(self.neo4j_driver, self.vector_store)
         
         # OpenAI setup
-        openai.api_key = os.getenv("OPENAI_API_KEY")
+        self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
         # Migration planner
         self.migration_planner = None
@@ -391,6 +391,11 @@ You are an expert Cypher query generator for a Neo4j graph database containing a
 6. For dependency queries, use: DEPENDS_ON or CALLS_SERVICE relationships
 7. For database queries, match through: (db:DatabaseHost) and related schemas/tables
 
+## CRITICAL Cypher Syntax Rules:
+- Multiple relationship types: Use `DEPENDS_ON|CALLS_SERVICE` (NOT `:DEPENDS_ON|:CALLS_SERVICE`)
+- Variable length paths: Use `[:DEPENDS_ON|CALLS_SERVICE*1..3]` (NOT `[:DEPENDS_ON|:CALLS_SERVICE*1..3]`)
+- Single relationships: Use `-[r:DEPENDS_ON|CALLS_SERVICE]->` (NOT `-[r:DEPENDS_ON|:CALLS_SERVICE]->`)
+
 User Question: {query}
 
 Generate the Cypher query:"""
@@ -400,7 +405,7 @@ Generate the Cypher query:"""
     def _call_openai_with_context(self, context: str, natural_query: str) -> str:
         """Call OpenAI API with comprehensive context and handle errors gracefully."""
         try:
-            response = openai.ChatCompletion.create(
+            response = self.openai_client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": context},
@@ -420,15 +425,17 @@ Generate the Cypher query:"""
 
             return cypher_query.strip()
 
-        except openai.error.AuthenticationError:
-            print("OpenAI API error: Invalid API key. Please check your API key.")
-            return ""
-        except openai.error.RateLimitError:
-            print("OpenAI API error: Rate limit exceeded. Please try again later.")
-            return ""
         except Exception as e:
-            print(f"OpenAI API error: {e}")
-            return ""
+            error_str = str(e).lower()
+            if "authentication" in error_str or "api key" in error_str:
+                print("OpenAI API error: Invalid API key. Please check your API key.")
+            elif "rate limit" in error_str or "quota" in error_str:
+                print("OpenAI API error: Rate limit exceeded. Please try again later.")
+            else:
+                print(f"OpenAI API error: {e}")
+            
+            # Return fallback query generation
+            return self._vector_based_cypher_generation(natural_query, [], [])
     
     def _vector_based_cypher_generation(self, query: str, schema_elements: List[Dict], query_patterns: List[Dict]) -> str:
         """Fallback: Generate Cypher using vector similarity patterns"""
@@ -514,6 +521,11 @@ Generate Cypher queries that help assess:
 4. Include ORDER BY for ranking/prioritization queries
 5. Use WHERE clauses to filter by technology stack when relevant
 
+## CRITICAL Cypher Syntax Rules:
+- Multiple relationship types: Use `DEPENDS_ON|CALLS_SERVICE` (NOT `:DEPENDS_ON|:CALLS_SERVICE`)
+- Variable length paths: Use `[:DEPENDS_ON|CALLS_SERVICE*1..3]` (NOT `[:DEPENDS_ON|:CALLS_SERVICE*1..3]`)
+- Single relationships: Use `-[r:DEPENDS_ON|CALLS_SERVICE]->` (NOT `-[r:DEPENDS_ON|:CALLS_SERVICE]->`)
+
 User Question: {query}
 
 Generate the migration-focused Cypher query:"""
@@ -524,10 +536,7 @@ Generate the migration-focused Cypher query:"""
         """Call OpenAI API with migration-specific context"""
         
         try:
-            from openai import OpenAI
-            client = OpenAI()
-            
-            response = client.chat.completions.create(
+            response = self.openai_client.chat.completions.create(
                 model="gpt-4-turbo-preview",
                 messages=[
                     {
@@ -645,7 +654,7 @@ def main():
                 print("=" * 60)
                 print(f"📄 Description: {plan['description']}")
                 print(f"🎯 Type: {plan['migration_type'].replace('_', ' ').title()}")
-                print(f"🏷️  Affected Services: {len(plan['affected_services'])} services")
+                print(f"🏷️  Affected Services: {len(plan['affected_services'])} {'service' if len(plan['affected_services']) == 1 else 'services'}")
                 if plan['affected_services']:
                     print(f"   Services: {', '.join(plan['affected_services'])}")
                 print(f"⏰ Timeline: {plan['timeline']}")

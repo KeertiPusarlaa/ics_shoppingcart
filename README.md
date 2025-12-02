@@ -159,6 +159,7 @@ The separation of **construction (JSON)** and **uplift (Cypher)** keeps maintena
 - pip install pymilvus
 - pip install openai
 - pip install sentence-transformers
+- pip install textblob
  
 ### **Start Neo4j**
 - docker build run command -

@@ -1,12 +1,13 @@
 import sqlite3
 from typing import Optional, List
 from textblob import TextBlob
-import openai
+from openai import OpenAI
 import os
 
 class PromptRefinementAgent:
     def __init__(self, db_path: str = "refinement_agent.db"):
         self.db_path = db_path
+        self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self._initialize_database()
 
     def _initialize_database(self):
@@ -60,11 +61,10 @@ class PromptRefinementAgent:
 
         # Use OpenAI to rephrase the query intelligently
         try:
-            openai.api_key = os.getenv("OPENAI_API_KEY")
             preserve_keywords = preserve_keywords or []
             preserve_instruction = "\n".join([f"Preserve the term '{keyword}' exactly as it is." for keyword in preserve_keywords])
 
-            response = openai.ChatCompletion.create(
+            response = self.openai_client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are an expert in refining and rephrasing natural language queries. Your task is to rephrase the user's query into a more detailed, specific, and precise version while preserving its original meaning. Use the context of previous similar queries and their refinements stored in the vector database to guide your rephrasing. Ensure the rephrased query is unambiguous and aligned with the user's intent."},

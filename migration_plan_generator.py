@@ -212,12 +212,20 @@ class MigrationPlanGenerator:
         elif "csharp service" in query_lower or "c# service" in query_lower and not affected_services:
             affected_services = self._get_services_by_language_from_ekg("csharp")
         
-        # Pattern-based discovery for partial matches
+        # Pattern-based discovery for partial matches (only if no exact matches found)
         if not affected_services:
+            # Exclude common words that shouldn't trigger pattern matching
+            exclude_words = {"create", "generate", "migration", "plan", "service", "only", "for", "with", "all", "system", "the", "and", "or", "but", "if", "when", "from", "to", "in", "on", "at", "by", "of", "as"}
+            
             for word in query_lower.split():
-                if len(word) > 3:  # Avoid short words
-                    pattern_matches = self._find_services_by_pattern_from_ekg(word)
-                    affected_services.extend([s for s in pattern_matches if s not in affected_services])
+                if len(word) > 3 and word not in exclude_words:  # Avoid short words and common terms
+                    # Only search for words that could be service names
+                    if word in all_services or any(word in service for service in all_services):
+                        pattern_matches = self._find_services_by_pattern_from_ekg(word)
+                        affected_services.extend([s for s in pattern_matches if s not in affected_services])
+                        # Stop after finding first match to avoid over-matching
+                        if affected_services:
+                            break
         
         return {
             "migration_type": migration_type,
@@ -231,7 +239,7 @@ class MigrationPlanGenerator:
         prerequisites = []
         
         if services:
-            prerequisites.append(f"Backup strategy for {len(services)} services: {', '.join(services[:3])}{'...' if len(services) > 3 else ''}")
+            prerequisites.append(f"Backup strategy for {len(services)} {'service' if len(services) == 1 else 'services'}: {', '.join(services)}")
         
         if dependencies:
             external_deps = [d for d in dependencies if d.get('to_language') == 'external']
@@ -271,15 +279,37 @@ class MigrationPlanGenerator:
         
         if services:
             metrics.extend([
-                f"All {len(services)} services operational post-migration",
-                f"Zero downtime for critical services: {', '.join(services[:2])}{'...' if len(services) > 2 else ''}"
+                f"All {len(services)} {'service' if len(services) == 1 else 'services'} operational post-migration",
+                f"Zero downtime for critical services: {', '.join(services)}"
             ])
         
         if dependencies:
+            # Extract specific dependency names for more detailed metrics
+            dep_names = []
+            for dep in dependencies:
+                if isinstance(dep, dict):
+                    dep_name = dep.get('to_name') or dep.get('target') or dep.get('name') or str(dep)
+                elif isinstance(dep, str):
+                    dep_name = dep
+                else:
+                    dep_name = str(dep)
+                if dep_name and dep_name not in dep_names:
+                    dep_names.append(dep_name)
+            
             metrics.extend([
                 f"All {len(dependencies)} dependency relationships validated",
                 "Response time maintained within 5% of baseline"
             ])
+            
+            if dep_names:
+                clean_dep_names = [name for name in dep_names if isinstance(name, str) and len(name) < 50]
+                if clean_dep_names:
+                    # Generate executable validation commands for dependencies
+                    validation_commands = []
+                    for dep in clean_dep_names[:5]:
+                        validation_commands.append(f"curl -f http://{dep}/health")
+                    
+                    metrics.append(f"Dependencies validated with commands: {'; '.join(validation_commands)}")
         
         # Add EKG-derived performance metrics
         metrics.extend([
@@ -289,6 +319,474 @@ class MigrationPlanGenerator:
         ])
         
         return metrics
+    
+    def _extract_implementation_details(self, service_name: str, record: Dict) -> Dict[str, Any]:
+        """Extract actual implementation details from EKG for agent execution"""
+        language = record.get("language", "").lower()
+        repo_path = record.get("repository_path") or record.get("path", "")
+        
+        details = {
+            "service_name": service_name,
+            "language": language,
+            "repository_path": repo_path,
+            "config_files": self._identify_config_files(language, repo_path),
+            "build_system": self._identify_build_system(language),
+            "package_manager": self._identify_package_manager(language),
+            "runtime_config": self._extract_runtime_config(record),
+            "environment_variables": self._extract_env_variables(service_name, record),
+            "current_versions": self._extract_current_versions(record),
+            "target_versions": self._generate_target_versions(language, record),
+            "file_modifications": self._generate_file_modifications(service_name, language, record)
+        }
+        
+        return details
+    
+    def _identify_config_files(self, language: str, repo_path: str) -> List[str]:
+        """Identify configuration files that need to be modified"""
+        config_files = []
+        
+        if language == "javascript":
+            config_files = [f"{repo_path}/package.json", f"{repo_path}/package-lock.json", f"{repo_path}/.nvmrc"]
+        elif language == "java":
+            config_files = [f"{repo_path}/pom.xml", f"{repo_path}/build.gradle", f"{repo_path}/gradle.properties"]
+        elif language == "python":
+            config_files = [f"{repo_path}/requirements.txt", f"{repo_path}/pyproject.toml", f"{repo_path}/setup.py"]
+        elif language == "go":
+            config_files = [f"{repo_path}/go.mod", f"{repo_path}/go.sum"]
+        elif language == "rust":
+            config_files = [f"{repo_path}/Cargo.toml", f"{repo_path}/Cargo.lock"]
+        elif language == "csharp":
+            config_files = [f"{repo_path}/*.csproj", f"{repo_path}/*.sln", f"{repo_path}/Directory.Build.props"]
+        
+        # Common files for all services
+        config_files.extend([f"{repo_path}/Dockerfile", f"{repo_path}/docker-compose.yml"])
+        
+        return config_files
+    
+    def _identify_build_system(self, language: str) -> Dict[str, str]:
+        """Identify build system and commands"""
+        build_systems = {
+            "javascript": {"system": "npm", "install": "npm install", "build": "npm run build", "test": "npm test"},
+            "java": {"system": "maven/gradle", "install": "mvn install", "build": "mvn package", "test": "mvn test"},
+            "python": {"system": "pip", "install": "pip install -r requirements.txt", "build": "python setup.py build", "test": "pytest"},
+            "go": {"system": "go", "install": "go mod download", "build": "go build", "test": "go test"},
+            "rust": {"system": "cargo", "install": "cargo fetch", "build": "cargo build", "test": "cargo test"},
+            "csharp": {"system": "dotnet", "install": "dotnet restore", "build": "dotnet build", "test": "dotnet test"}
+        }
+        return build_systems.get(language, {"system": "unknown", "install": "", "build": "", "test": ""})
+    
+    def _identify_package_manager(self, language: str) -> str:
+        """Identify package manager for dependency updates"""
+        managers = {
+            "javascript": "npm",
+            "java": "maven",
+            "python": "pip", 
+            "go": "go mod",
+            "rust": "cargo",
+            "csharp": "nuget"
+        }
+        return managers.get(language, "unknown")
+    
+    def _extract_runtime_config(self, record: Dict) -> Dict[str, Any]:
+        """Extract runtime configuration from EKG data"""
+        exposed_apis = record.get("exposed_apis", [])
+        
+        config = {
+            "ports": [api.get('port') for api in exposed_apis if api.get('port')],
+            "protocols": [api.get('protocol') for api in exposed_apis if api.get('protocol')],
+            "endpoints": [api.get('address') for api in exposed_apis if api.get('address')]
+        }
+        
+        return config
+    
+    def _extract_env_variables(self, service_name: str, record: Dict) -> List[str]:
+        """Extract environment variables that may need updates"""
+        # Generate common environment variables based on service patterns
+        env_vars = [
+            f"{service_name.upper()}_HOST",
+            f"{service_name.upper()}_PORT", 
+            f"{service_name.upper()}_VERSION"
+        ]
+        
+        # Add dependency-based environment variables
+        for dep in record.get("runtime_dependencies", []):
+            env_vars.extend([
+                f"{dep.upper()}_URL",
+                f"{dep.upper()}_HOST"
+            ])
+            
+        return env_vars
+    
+    def _generate_migration_commands(self, service_name: str, record: Dict) -> Dict[str, List[str]]:
+        """Generate executable migration commands for the service"""
+        language = record.get("language", "").lower()
+        repo_path = record.get("path", "")
+        build_system = self._identify_build_system(language)
+        
+        commands = {
+            "pre_migration": [
+                f"cd {repo_path}",
+                f"git checkout -b migration-{service_name}-$(date +%Y%m%d)",
+                "git status",
+                f"docker build -t {service_name}:backup ."
+            ],
+            "dependency_update": self._generate_dependency_update_commands(language, repo_path),
+            "build_and_test": [
+                build_system.get("install", ""),
+                build_system.get("build", ""),
+                build_system.get("test", "")
+            ],
+            "deployment": [
+                f"docker build -t {service_name}:latest .",
+                f"docker tag {service_name}:latest {service_name}:migration-$(date +%Y%m%d)",
+                "docker-compose up -d --no-deps {service_name}"
+            ],
+            "rollback": [
+                f"docker stop {service_name}",
+                f"docker run -d --name {service_name} {service_name}:backup",
+                "git checkout main",
+                f"git branch -D migration-{service_name}-*"
+            ]
+        }
+        
+        # Remove empty commands
+        return {k: [cmd for cmd in v if cmd.strip()] for k, v in commands.items()}
+    
+    def _generate_dependency_update_commands(self, language: str, repo_path: str) -> List[str]:
+        """Generate language-specific dependency update commands"""
+        commands = []
+        
+        if language == "javascript":
+            commands = [
+                "npm audit",
+                "npm update",
+                "npm audit fix",
+                "npm ci"
+            ]
+        elif language == "java":
+            commands = [
+                "mvn versions:display-dependency-updates",
+                "mvn versions:use-latest-versions",
+                "mvn clean compile"
+            ]
+        elif language == "python":
+            commands = [
+                "pip list --outdated",
+                "pip install --upgrade -r requirements.txt",
+                "pip freeze > requirements.txt"
+            ]
+        elif language == "go":
+            commands = [
+                "go list -u -m all",
+                "go get -u ./...",
+                "go mod tidy"
+            ]
+        elif language == "rust":
+            commands = [
+                "cargo update",
+                "cargo check"
+            ]
+        elif language == "csharp":
+            commands = [
+                "dotnet list package --outdated",
+                "dotnet add package --version latest",
+                "dotnet restore"
+            ]
+            
+        return commands
+    
+    def _generate_validation_scripts(self, service_name: str, record: Dict) -> Dict[str, List[str]]:
+        """Generate validation scripts for migration verification"""
+        exposed_apis = record.get("exposed_apis", [])
+        
+        scripts = {
+            "health_checks": [],
+            "integration_tests": [],
+            "performance_tests": []
+        }
+        
+        # Generate health check scripts based on exposed APIs
+        for api in exposed_apis:
+            port = api.get('port')
+            protocol = api.get('protocol', 'http')
+            if port:
+                scripts["health_checks"].extend([
+                    f"curl -f {protocol}://localhost:{port}/health || echo 'Health check failed for {service_name}:{port}'",
+                    f"nc -zv localhost {port} || echo 'Port {port} not accessible for {service_name}'"
+                ])
+        
+        # Generate integration tests for dependencies
+        for dep in record.get("runtime_dependencies", []):
+            scripts["integration_tests"].append(
+                f"curl -f http://{dep}/health && echo 'Dependency {dep} is healthy' || echo 'Dependency {dep} failed'"
+            )
+        
+        # Generate performance baseline tests
+        if exposed_apis:
+            main_port = exposed_apis[0].get('port')
+            if main_port:
+                scripts["performance_tests"].extend([
+                    f"ab -n 100 -c 10 http://localhost:{main_port}/ > /tmp/{service_name}_perf_test.log",
+                    f"echo 'Performance baseline saved for {service_name}'"
+                ])
+        
+        return scripts
+    
+    def _extract_current_versions(self, record: Dict) -> Dict[str, str]:
+        """Extract current versions from EKG data with intelligent defaults"""
+        current_versions = {}
+        language = record.get("language", "").lower()
+        
+        # Extract Java version if available
+        java_version = record.get("java_version")
+        if java_version:
+            current_versions["java"] = java_version
+        elif language == "java":
+            current_versions["java"] = "17.0.0"  # Common enterprise Java version
+        
+        # Extract dependency versions from EKG
+        code_dependencies = record.get("code_dependencies", [])
+        if code_dependencies:
+            for dep in code_dependencies:
+                if isinstance(dep, str):
+                    # Try to parse version from dependency string (e.g., "express@4.17.1")
+                    if "@" in dep:
+                        name, version = dep.split("@", 1)
+                        current_versions[name] = version
+                    else:
+                        # Provide realistic current versions based on common usage
+                        current_versions[dep] = self._get_common_current_version(dep, language)
+        
+        # Extract framework versions
+        frameworks = record.get("frameworks", [])
+        for framework in frameworks:
+            if isinstance(framework, str):
+                current_versions[framework] = self._get_common_current_version(framework, language)
+        
+        # Add language runtime versions with realistic defaults
+        if language == "javascript":
+            if "node" not in current_versions:
+                current_versions["node"] = "16.20.0"  # Common LTS version
+            if "express" not in current_versions and any("express" in dep for dep in code_dependencies):
+                current_versions["express"] = "4.17.1"
+        elif language == "python":
+            if "python" not in current_versions:
+                current_versions["python"] = "3.9.16"  # Common production version
+        elif language == "go":
+            if "go" not in current_versions:
+                current_versions["go"] = "1.19.5"  # Common stable version
+        elif language == "rust":
+            if "rust" not in current_versions:
+                current_versions["rust"] = "1.65.0"  # Common stable version
+        elif language == "csharp":
+            if "dotnet" not in current_versions:
+                current_versions["dotnet"] = "6.0"  # Common enterprise version
+        
+        return current_versions
+    
+    def _get_common_current_version(self, dependency: str, language: str) -> str:
+        """Get common current versions for dependencies based on language"""
+        # Common current versions by language and dependency
+        version_map = {
+            "javascript": {
+                "express": "4.17.1",
+                "grpcio": "1.24.4",
+                "grpc": "1.24.4",
+                "opentelemetry": "1.8.0",
+                "sinatra": "2.2.0"
+            },
+            "java": {
+                "spring-boot": "2.7.0",
+                "maven": "3.8.6",
+                "grpc-java": "1.45.1",
+                "opentelemetry": "1.15.0"
+            },
+            "python": {
+                "flask": "2.0.3",
+                "fastapi": "0.75.2",
+                "grpcio": "1.44.0",
+                "opentelemetry": "1.11.1",
+                "psycopg2-binary": "2.9.3",
+                "openai": "0.27.0"
+            },
+            "go": {
+                "grpc": "1.45.2",
+                "opentelemetry": "1.7.0"
+            },
+            "csharp": {
+                "aspnetcore": "6.0",
+                "grpc": "2.44.0"
+            },
+            "ruby": {
+                "sinatra": "2.2.0",
+                "grpc": "1.44.0"
+            }
+        }
+        
+        # Check language-specific versions first
+        if language in version_map and dependency in version_map[language]:
+            return version_map[language][dependency]
+        
+        # Check common dependencies across languages
+        for lang_versions in version_map.values():
+            if dependency in lang_versions:
+                return lang_versions[dependency]
+        
+        # Default fallback
+        return "current"
+    
+    def _generate_target_versions(self, language: str, record: Dict) -> Dict[str, str]:
+        """Generate target versions for migration based on actual dependencies in EKG"""
+        target_versions = {}
+        code_dependencies = record.get("code_dependencies", [])
+        frameworks = record.get("frameworks", [])
+        
+        # Language runtime target versions
+        if language == "javascript":
+            target_versions["node"] = "20.10.0"
+        elif language == "java":
+            target_versions["java"] = "21.0.1"
+        elif language == "python":
+            target_versions["python"] = "3.11.6"
+        elif language == "go":
+            target_versions["go"] = "1.21.3"
+        elif language == "rust":
+            target_versions["rust"] = "1.73.0"
+        elif language == "csharp":
+            target_versions["dotnet"] = "8.0"
+        
+        # Only add target versions for dependencies that actually exist in EKG data
+        all_deps = set(code_dependencies + frameworks)
+        
+        if language == "javascript":
+            if any("express" in dep for dep in all_deps):
+                target_versions["express"] = "4.18.2"
+            if any("grpc" in dep.lower() for dep in all_deps):
+                target_versions["grpc"] = "1.25.0"
+        elif language == "java":
+            if any("spring" in dep.lower() for dep in all_deps):
+                target_versions["spring-boot"] = "3.1.5"
+            if any("maven" in dep.lower() for dep in all_deps):
+                target_versions["maven"] = "3.9.4"
+            if any("grpc" in dep.lower() for dep in all_deps):
+                target_versions["grpc-java"] = "1.55.1"
+        elif language == "python":
+            if any("flask" in dep.lower() for dep in all_deps):
+                target_versions["flask"] = "2.3.3"
+            if any("fastapi" in dep.lower() for dep in all_deps):
+                target_versions["fastapi"] = "0.104.1"
+            if any("grpc" in dep.lower() for dep in all_deps):
+                target_versions["grpcio"] = "1.58.0"
+        elif language == "csharp":
+            if any("aspnet" in dep.lower() for dep in all_deps):
+                target_versions["aspnetcore"] = "8.0"
+        
+        return target_versions
+    
+    def _generate_file_modifications(self, service_name: str, language: str, record: Dict) -> Dict[str, Dict]:
+        """Generate specific file content modifications for agent execution"""
+        repo_path = record.get("repository_path") or record.get("path", "")
+        current_versions = self._extract_current_versions(record)
+        target_versions = self._generate_target_versions(language, record)
+        exposed_apis = record.get("exposed_apis", [])
+        
+        modifications = {}
+        
+        if language == "javascript":
+            # Package.json modifications
+            modifications[f"{repo_path}/package.json"] = {
+                "file_type": "json",
+                "modifications": [
+                    {
+                        "action": "update_dependency",
+                        "dependency": "express",
+                        "from_version": current_versions.get("express", "4.17.1"),
+                        "to_version": target_versions.get("express", "4.18.2")
+                    },
+                    {
+                        "action": "update_engines",
+                        "field": "node",
+                        "from_version": ">=16.0.0",
+                        "to_version": ">=20.0.0"
+                    }
+                ]
+            }
+            
+            # Dockerfile modifications
+            modifications[f"{repo_path}/Dockerfile"] = {
+                "file_type": "dockerfile",
+                "modifications": [
+                    {
+                        "action": "update_base_image",
+                        "from_line": "FROM node:16-alpine",
+                        "to_line": "FROM node:20-alpine"
+                    }
+                ]
+            }
+            
+        elif language == "java":
+            # Maven pom.xml modifications
+            modifications[f"{repo_path}/pom.xml"] = {
+                "file_type": "xml",
+                "modifications": [
+                    {
+                        "action": "update_property",
+                        "property": "maven.compiler.source",
+                        "from_value": "11",
+                        "to_value": "21"
+                    },
+                    {
+                        "action": "update_property", 
+                        "property": "maven.compiler.target",
+                        "from_value": "11", 
+                        "to_value": "21"
+                    }
+                ]
+            }
+            
+        elif language == "python":
+            # Requirements.txt modifications
+            modifications[f"{repo_path}/requirements.txt"] = {
+                "file_type": "text",
+                "modifications": [
+                    {
+                        "action": "update_requirement",
+                        "package": "flask",
+                        "from_version": "2.0.0",
+                        "to_version": "2.3.3"
+                    }
+                ]
+            }
+            
+            # Dockerfile modifications
+            modifications[f"{repo_path}/Dockerfile"] = {
+                "file_type": "dockerfile", 
+                "modifications": [
+                    {
+                        "action": "update_base_image",
+                        "from_line": "FROM python:3.9-slim",
+                        "to_line": "FROM python:3.11-slim"
+                    }
+                ]
+            }
+        
+        # Environment configuration modifications
+        if exposed_apis:
+            main_port = exposed_apis[0].get('port')
+            if main_port:
+                modifications[f"{repo_path}/docker-compose.yml"] = {
+                    "file_type": "yaml",
+                    "modifications": [
+                        {
+                            "action": "verify_port",
+                            "service": service_name,
+                            "current_port": main_port,
+                            "ensure_exposed": True
+                        }
+                    ]
+                }
+        
+        return modifications
     
     def _classify_query_intent(self, query: str) -> str:
         """Classify the user's intent"""
@@ -334,16 +832,20 @@ class MigrationPlanGenerator:
         }
     
     def _analyze_services_directly(self, target_services: List[str]) -> Dict[str, Any]:
-        """Direct Neo4j analysis of services"""
+        """Direct Neo4j analysis of services with code-level implementation details"""
         
         if target_services:
             cypher = """
             MATCH (s:Service) WHERE s.name IN $services
             OPTIONAL MATCH (s)-[:DEPENDS_ON]->(dep)
             OPTIONAL MATCH (caller:Service)-[:CALLS_SERVICE]->(s)
+            OPTIONAL MATCH (s)-[:EXPOSES_API]->(api:API)
             RETURN s.name as service, s.language as language, s.repository_path as path,
-                   collect(DISTINCT dep.name) as dependencies,
-                   collect(DISTINCT caller.name) as callers
+                   s.dependencies as code_dependencies, s.frameworks as frameworks,
+                   s.java_version as java_version,
+                   collect(DISTINCT dep.name) as runtime_dependencies,
+                   collect(DISTINCT caller.name) as callers,
+                   collect(DISTINCT {port: api.port, protocol: api.protocol, address: api.address}) as exposed_apis
             """
             params = {"services": target_services}
         else:
@@ -351,9 +853,13 @@ class MigrationPlanGenerator:
             MATCH (s:Service)-[:PART_OF]->(a:Application)
             OPTIONAL MATCH (s)-[:DEPENDS_ON]->(dep)
             OPTIONAL MATCH (caller:Service)-[:CALLS_SERVICE]->(s)
+            OPTIONAL MATCH (s)-[:EXPOSES_API]->(api:API)
             RETURN s.name as service, s.language as language, s.repository_path as path,
-                   collect(DISTINCT dep.name) as dependencies,
-                   collect(DISTINCT caller.name) as callers
+                   s.dependencies as code_dependencies, s.frameworks as frameworks,
+                   s.java_version as java_version,
+                   collect(DISTINCT dep.name) as runtime_dependencies,
+                   collect(DISTINCT caller.name) as callers,
+                   collect(DISTINCT {port: api.port, protocol: api.protocol, address: api.address}) as exposed_apis
             """
             params = {}
         
@@ -362,14 +868,23 @@ class MigrationPlanGenerator:
             services_data = []
             
             for record in result:
+                # Extract actual implementation details for agent execution
+                service_name = record["service"]
                 service_analysis = {
-                    "service": record["service"],
+                    "service": service_name,
                     "language": record["language"], 
-                    "path": record["path"],
-                    "dependencies": [d for d in record["dependencies"] if d],
+                    "repository_path": record["path"],
+                    "code_dependencies": record.get("code_dependencies", []),
+                    "frameworks": record.get("frameworks", []),
+                    "java_version": record.get("java_version"),
+                    "runtime_dependencies": [d for d in record["runtime_dependencies"] if d],
                     "callers": [c for c in record["callers"] if c],
-                    "complexity_score": len([d for d in record["dependencies"] if d]) * 2 + len([c for c in record["callers"] if c]) * 3,
-                    "migration_risk": "HIGH" if (len([d for d in record["dependencies"] if d]) > 3 or len([c for c in record["callers"] if c]) > 5) else "MEDIUM" if (len([d for d in record["dependencies"] if d]) > 1) else "LOW"
+                    "exposed_apis": [api for api in record["exposed_apis"] if api.get('port')],
+                    "implementation_details": self._extract_implementation_details(service_name, record),
+                    "migration_commands": self._generate_migration_commands(service_name, record),
+                    "validation_scripts": self._generate_validation_scripts(service_name, record),
+                    "complexity_score": len([d for d in record.get("runtime_dependencies", []) if d]) * 2 + len([c for c in record.get("callers", []) if c]) * 3,
+                    "migration_risk": "HIGH" if (len([d for d in record.get("runtime_dependencies", []) if d]) > 3 or len([c for c in record.get("callers", []) if c]) > 5) else "MEDIUM" if (len([d for d in record.get("runtime_dependencies", []) if d]) > 1) else "LOW"
                 }
                 services_data.append(service_analysis)
             
@@ -665,7 +1180,9 @@ Estimated based on complexity: {migration_context['complexity_level']} complexit
                     ORDER BY s.name
                     """
                     services_result = session.run(services_query)
-                analysis_results['services'] = [dict(record) for record in services_result]
+                # Use enhanced service analysis for implementation details
+                enhanced_services = self._analyze_services_directly(affected_services)
+                analysis_results['services'] = enhanced_services.get('services', [])
                 
                 # Get ONLY dependencies for the specific services from EKG
                 if affected_services:
@@ -794,65 +1311,130 @@ Estimated based on complexity: {migration_context['complexity_level']} complexit
             with self.neo4j_driver.session() as session:
                 dependency_data = {}
                 
-                # Get critical dependency paths
-                critical_paths_query = """
-                MATCH path = (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE*1..4]->(s2:Service)
-                WHERE s1.name <> s2.name
-                WITH s1, s2, path, length(path) as depth
-                ORDER BY depth DESC
-                RETURN s1.name as start_service, s1.language as start_language,
-                       s2.name as end_service, s2.language as end_language,
-                       depth as dependency_depth,
-                       [n in nodes(path) | n.name] as dependency_chain
-                LIMIT 20
-                """
-                critical_result = session.run(critical_paths_query)
+                # Get affected services for filtering
+                affected_services = migration_context.get('affected_services', [])
+                
+                # Get critical dependency paths - only for specified services
+                if affected_services:
+                    service_filter = "AND (s1.name IN $services OR s2.name IN $services)"
+                    critical_paths_query = f"""
+                    MATCH path = (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE*1..4]->(s2:Service)
+                    WHERE s1.name <> s2.name {service_filter}
+                    WITH s1, s2, path, length(path) as depth
+                    ORDER BY depth DESC
+                    RETURN s1.name as start_service, s1.language as start_language,
+                           s2.name as end_service, s2.language as end_language,
+                           depth as dependency_depth,
+                           [n in nodes(path) | n.name] as dependency_chain
+                    LIMIT 20
+                    """
+                    critical_result = session.run(critical_paths_query, services=affected_services)
+                else:
+                    # Fallback to all services if none specified
+                    critical_paths_query = """
+                    MATCH path = (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE*1..4]->(s2:Service)
+                    WHERE s1.name <> s2.name
+                    WITH s1, s2, path, length(path) as depth
+                    ORDER BY depth DESC
+                    RETURN s1.name as start_service, s1.language as start_language,
+                           s2.name as end_service, s2.language as end_language,
+                           depth as dependency_depth,
+                           [n in nodes(path) | n.name] as dependency_chain
+                    LIMIT 20
+                    """
+                    critical_result = session.run(critical_paths_query)
                 dependency_data['critical_paths'] = [dict(record) for record in critical_result]
                 
-                # Identify potential circular dependencies
-                circular_deps_query = """
-                MATCH (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE*2..5]->(s1)
-                RETURN s1.name as service, s1.language as language,
-                       'circular_dependency' as issue_type
-                """
-                circular_result = session.run(circular_deps_query)
+                # Identify potential circular dependencies - only for specified services
+                if affected_services:
+                    circular_deps_query = """
+                    MATCH (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE*2..5]->(s1)
+                    WHERE s1.name IN $services
+                    RETURN s1.name as service, s1.language as language,
+                           'circular_dependency' as issue_type
+                    """
+                    circular_result = session.run(circular_deps_query, services=affected_services)
+                else:
+                    circular_deps_query = """
+                    MATCH (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE*2..5]->(s1)
+                    RETURN s1.name as service, s1.language as language,
+                           'circular_dependency' as issue_type
+                    """
+                    circular_result = session.run(circular_deps_query)
                 dependency_data['circular_dependencies'] = [dict(record) for record in circular_result]
                 
-                # Find high-impact services (most connected)
-                high_impact_query = """
-                MATCH (s:Service)-[:PART_OF]->(a:Application)
-                OPTIONAL MATCH (s)-[:DEPENDS_ON|CALLS_SERVICE]->(dep:Service)
-                OPTIONAL MATCH (caller:Service)-[:DEPENDS_ON|CALLS_SERVICE]->(s)
-                WITH s, count(DISTINCT dep) as outgoing_deps, 
-                     count(DISTINCT caller) as incoming_deps,
-                     collect(DISTINCT dep.name) as dependencies,
-                     collect(DISTINCT caller.name) as callers
-                RETURN s.name as service, s.language as language,
-                       outgoing_deps, incoming_deps,
-                       (outgoing_deps + incoming_deps) as total_connections,
-                       dependencies, callers,
-                       CASE 
-                         WHEN (outgoing_deps + incoming_deps) > 8 THEN 'CRITICAL'
-                         WHEN (outgoing_deps + incoming_deps) > 4 THEN 'HIGH'
-                         WHEN (outgoing_deps + incoming_deps) > 1 THEN 'MEDIUM'
-                         ELSE 'LOW'
-                       END as impact_level
-                ORDER BY total_connections DESC
-                LIMIT 15
-                """
-                high_impact_result = session.run(high_impact_query)
+                # Find high-impact services (most connected) - only for specified services
+                if affected_services:
+                    high_impact_query = """
+                    MATCH (s:Service)-[:PART_OF]->(a:Application)
+                    WHERE s.name IN $services
+                    OPTIONAL MATCH (s)-[:DEPENDS_ON|CALLS_SERVICE]->(dep:Service)
+                    OPTIONAL MATCH (caller:Service)-[:DEPENDS_ON|CALLS_SERVICE]->(s)
+                    WITH s, count(DISTINCT dep) as outgoing_deps, 
+                         count(DISTINCT caller) as incoming_deps,
+                         collect(DISTINCT dep.name) as dependencies,
+                         collect(DISTINCT caller.name) as callers
+                    RETURN s.name as service, s.language as language,
+                           outgoing_deps, incoming_deps,
+                           (outgoing_deps + incoming_deps) as total_connections,
+                           dependencies, callers,
+                           CASE 
+                             WHEN (outgoing_deps + incoming_deps) > 8 THEN 'CRITICAL'
+                             WHEN (outgoing_deps + incoming_deps) > 4 THEN 'HIGH'
+                             WHEN (outgoing_deps + incoming_deps) > 1 THEN 'MEDIUM'
+                             ELSE 'LOW'
+                           END as impact_level
+                    ORDER BY total_connections DESC
+                    LIMIT 15
+                    """
+                    high_impact_result = session.run(high_impact_query, services=affected_services)
+                else:
+                    high_impact_query = """
+                    MATCH (s:Service)-[:PART_OF]->(a:Application)
+                    OPTIONAL MATCH (s)-[:DEPENDS_ON|CALLS_SERVICE]->(dep:Service)
+                    OPTIONAL MATCH (caller:Service)-[:DEPENDS_ON|CALLS_SERVICE]->(s)
+                    WITH s, count(DISTINCT dep) as outgoing_deps, 
+                         count(DISTINCT caller) as incoming_deps,
+                         collect(DISTINCT dep.name) as dependencies,
+                         collect(DISTINCT caller.name) as callers
+                    RETURN s.name as service, s.language as language,
+                           outgoing_deps, incoming_deps,
+                           (outgoing_deps + incoming_deps) as total_connections,
+                           dependencies, callers,
+                           CASE 
+                             WHEN (outgoing_deps + incoming_deps) > 8 THEN 'CRITICAL'
+                             WHEN (outgoing_deps + incoming_deps) > 4 THEN 'HIGH'
+                             WHEN (outgoing_deps + incoming_deps) > 1 THEN 'MEDIUM'
+                             ELSE 'LOW'
+                           END as impact_level
+                    ORDER BY total_connections DESC
+                    LIMIT 15
+                    """
+                    high_impact_result = session.run(high_impact_query)
                 dependency_data['high_impact_services'] = [dict(record) for record in high_impact_result]
                 
-                # Get language-specific dependency clusters
-                language_clusters_query = """
-                MATCH (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE]->(s2:Service)
-                WHERE s1.language = s2.language
-                RETURN s1.language as language,
-                       count(*) as internal_connections,
-                       collect(DISTINCT s1.name) + collect(DISTINCT s2.name) as services_in_cluster
-                ORDER BY internal_connections DESC
-                """
-                clusters_result = session.run(language_clusters_query)
+                # Get language-specific dependency clusters - only for specified services
+                if affected_services:
+                    language_clusters_query = """
+                    MATCH (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE]->(s2:Service)
+                    WHERE s1.language = s2.language 
+                    AND (s1.name IN $services OR s2.name IN $services)
+                    RETURN s1.language as language,
+                           count(*) as internal_connections,
+                           collect(DISTINCT s1.name) + collect(DISTINCT s2.name) as services_in_cluster
+                    ORDER BY internal_connections DESC
+                    """
+                    clusters_result = session.run(language_clusters_query, services=affected_services)
+                else:
+                    language_clusters_query = """
+                    MATCH (s1:Service)-[:DEPENDS_ON|CALLS_SERVICE]->(s2:Service)
+                    WHERE s1.language = s2.language
+                    RETURN s1.language as language,
+                           count(*) as internal_connections,
+                           collect(DISTINCT s1.name) + collect(DISTINCT s2.name) as services_in_cluster
+                    ORDER BY internal_connections DESC
+                    """
+                    clusters_result = session.run(language_clusters_query)
                 dependency_data['language_clusters'] = [dict(record) for record in clusters_result]
                 
                 return dependency_data
@@ -1191,10 +1773,11 @@ Based on comprehensive system analysis of {service_count} services with {complex
                                          dependency_analysis: Dict[str, Any]) -> MigrationPlan:
         """Structure the enhanced migration plan with comprehensive analysis data"""
         
-        # Extract structured information
-        affected_services = [s.get('name') for s in neo4j_analysis.get('services', [])]
+        # Extract structured information - prioritize user-specified services from query
         if migration_context.get('affected_services'):
             affected_services = migration_context['affected_services']
+        else:
+            affected_services = [s.get('name') for s in neo4j_analysis.get('services', [])]
         
         complexity_info = system_analysis.get('complexity_score', {})
         readiness_info = system_analysis.get('readiness_assessment', {})
@@ -1440,12 +2023,20 @@ Based on comprehensive system analysis of {service_count} services with {complex
                              system_analysis: Dict[str, Any], neo4j_analysis: Dict[str, Any]) -> MigrationPlan:
         """Create migration plan based purely on EKG data"""
         
-        # Get actual services from EKG
-        services = neo4j_analysis.get('services', [])
+        # Get actual services from EKG but filter by user-requested services
+        all_services_data = neo4j_analysis.get('services', [])
         dependencies = neo4j_analysis.get('dependencies', [])
         
-        # Extract actual service names (no duplicates)
-        affected_services = list(set(s.get('name') for s in services if s.get('name')))
+        # Use the specific services requested by user from migration_context
+        requested_services = migration_context.get('affected_services', [])
+        if requested_services:
+            # Filter EKG services to only include requested ones
+            services = [s for s in all_services_data if (s.get('service') or s.get('name')) in requested_services]
+            affected_services = requested_services
+        else:
+            # Fallback to all services if no specific ones requested
+            services = all_services_data
+            affected_services = list(set(s.get('service') or s.get('name') for s in services if s.get('service') or s.get('name')))
         
         # Calculate realistic timeline based on EKG data
         dep_count = len(dependencies)
@@ -1456,63 +2047,145 @@ Based on comprehensive system analysis of {service_count} services with {complex
         steps = []
         step_num = 1
         
-        # Analysis step based on actual dependencies
+        # Analysis step based on actual dependencies with specific details
         if dependencies:
+            # Extract specific dependency relationships for detailed description
+            dep_details = []
+            for dep in dependencies:
+                if isinstance(dep, dict):
+                    from_svc = dep.get('from_service', 'unknown')
+                    to_svc = dep.get('to_service', dep.get('to_name', 'unknown'))
+                    rel_type = dep.get('relationship_type', 'unknown')
+                    dep_details.append(f"{from_svc} → {to_svc} ({rel_type})")
+                else:
+                    dep_details.append(str(dep))
+            
+            # Limit to first 5 for readability, show all if <= 5
+            if len(dep_details) <= 5:
+                dep_description = f"Review specific dependencies: {', '.join(dep_details)}"
+            else:
+                dep_description = f"Review key dependencies: {', '.join(dep_details[:5])} (and {len(dep_details)-5} more)"
+            
             steps.append(MigrationStep(
                 step_number=step_num,
                 title=f"Analyze {service_count} Service Dependencies",
-                description=f"Review {len(dependencies)} actual dependencies identified in EKG",
+                description=dep_description,
                 category="Planning",
                 estimated_effort="Medium",
                 dependencies=[],
-                risks=[f"Dependencies: {len(dependencies)} relationships to verify"],
-                validation_criteria=[f"All {len(dependencies)} dependencies validated"]
+                risks=[f"Critical dependencies: {', '.join(dep_details[:3])}{'...' if len(dep_details) > 3 else ''}"],
+                validation_criteria=[f"All {len(dependencies)} dependencies validated: {', '.join([d.split(' → ')[1].split(' (')[0] for d in dep_details[:3]])}{'...' if len(dep_details) > 3 else ''}"]
             ))
             step_num += 1
         
         # Service-specific migration steps (remove duplicates)
         processed_services = set()
         for service in services:
-            service_name = service.get('name')
+            service_name = service.get('service') or service.get('name')
             if service_name in processed_services:
                 continue
             processed_services.add(service_name)
             
             service_lang = service.get('language', 'unknown')
-            service_deps = len(service.get('runtime_deps', []))
+            service_deps = service.get('runtime_deps', [])
+            # Handle both string and dict dependencies safely
+            service_dep_names = []
+            if service_deps:
+                for d in service_deps:
+                    if isinstance(d, dict):
+                        dep_name = d.get('to_name') or d.get('name') or str(d)
+                    else:
+                        dep_name = str(d)
+                    if dep_name and dep_name not in service_dep_names:
+                        service_dep_names.append(dep_name)
+            
+            # Build detailed description with actual dependency names
+            if service_dep_names:
+                dep_description = f"Migrate {service_lang} service with dependencies on: {', '.join(service_dep_names)}"
+            else:
+                dep_description = f"Migrate {service_lang} service (no external dependencies)"
+            
+            # Get implementation details for this service
+            impl_details = service.get('implementation_details', {})
+            migration_commands = service.get('migration_commands', {})
+            validation_scripts = service.get('validation_scripts', {})
+            
+            # Create detailed implementation step with executable commands
+            step_description = f"""Execute migration for {service_lang} service:
+
+**Pre-migration Commands:**
+{chr(10).join([f"  {cmd}" for cmd in migration_commands.get('pre_migration', [])])}
+
+**Dependency Updates:**
+{chr(10).join([f"  {cmd}" for cmd in migration_commands.get('dependency_update', [])])}
+
+**Build and Test:**
+{chr(10).join([f"  {cmd}" for cmd in migration_commands.get('build_and_test', [])])}
+
+**Configuration Files to Update:**
+{chr(10).join([f"  {file}" for file in impl_details.get('config_files', [])])}
+
+**File Modifications for Agent Execution:**
+{chr(10).join([f"  📝 {file_path}:" + chr(10) + chr(10).join([f"     - {mod['action']}: {mod.get('dependency', mod.get('property', mod.get('field', 'N/A')))}" + (f" ({mod.get('from_version', mod.get('from_value', ''))} → {mod.get('to_version', mod.get('to_value', ''))})" if mod.get('from_version') or mod.get('from_value') else "") for mod in file_info['modifications']]) for file_path, file_info in impl_details.get('file_modifications', {}).items()])}
+
+**Current vs Target Versions:**
+{chr(10).join([f"  {name}: {impl_details.get('current_versions', {}).get(name, 'unknown')} → {target_version}" for name, target_version in impl_details.get('target_versions', {}).items()])}
+
+**Environment Variables:**
+{chr(10).join([f"  {var}" for var in impl_details.get('environment_variables', [])])}
+"""
             
             steps.append(MigrationStep(
                 step_number=step_num,
                 title=f"Migrate {service_name} Service",
-                description=f"Migrate {service_lang} service with {service_deps} dependencies",
+                description=step_description,
                 category="Implementation", 
-                estimated_effort="High" if service_deps > 3 else "Medium",
+                estimated_effort="High" if len(service_dep_names) > 3 else "Medium",
                 dependencies=[f"Analyze {service_count} Service Dependencies"] if steps else [],
-                risks=[f"Service has {service_deps} dependencies"] if service_deps > 0 else [],
-                validation_criteria=[f"{service_name} service operational"]
+                risks=[f"Service depends on: {', '.join(service_dep_names)}", f"Config files: {len(impl_details.get('config_files', []))} files"] if service_dep_names else [],
+                validation_criteria=[f"Health checks: {', '.join(validation_scripts.get('health_checks', [])[:2])}{'...' if len(validation_scripts.get('health_checks', [])) > 2 else ''}", f"Integration tests pass for: {', '.join(service_dep_names)}" if service_dep_names else f"{service_name} service operational"]
             ))
             step_num += 1
         
-        # Final validation step
+        # Final validation step with specific service names
+        service_names = ', '.join(affected_services) if affected_services else 'target services'
         steps.append(MigrationStep(
             step_number=step_num,
             title="Validate Complete Migration",
-            description=f"End-to-end testing of {len(affected_services)} migrated services",
+            description=f"End-to-end testing of migrated services: {service_names}",
             category="Testing",
             estimated_effort="High",
             dependencies=[step.title for step in steps if step.category == "Implementation"],
-            risks=["Integration issues between services"],
-            validation_criteria=["All services operational", "All integrations tested"]
+            risks=[f"Integration issues between {service_names} and dependent services"],
+            validation_criteria=[f"Services operational: {service_names}", f"All integrations tested for {service_names}"]
         ))
         
-        # EKG-based risks
+        # EKG-based risks with specific details
         risks_and_mitigations = {}
+        
+        # Add dependency-specific risks
+        if dependencies:
+            dep_services = set()
+            for dep in dependencies:
+                if isinstance(dep, dict):
+                    to_svc = dep.get('to_service', dep.get('to_name'))
+                    if to_svc:
+                        dep_services.add(to_svc)
+            
+            if dep_services:
+                risks_and_mitigations[f"Service dependencies on: {', '.join(list(dep_services)[:3])}{'...' if len(dep_services) > 3 else ''}"] = f"Validate {', '.join(list(dep_services))} availability and compatibility before migration"
+        
+        # Add general system risks
+        if len(affected_services) == 1:
+            risks_and_mitigations[f"Single service migration impact on {affected_services[0]}"] = f"Thorough testing and rollback plan for {affected_services[0]}"
+        
+        # Add any additional risk factors from system analysis
         for risk in system_analysis.get('risk_factors', []):
             risks_and_mitigations[risk] = "Implement comprehensive testing and monitoring"
         
         return MigrationPlan(
             title=f"EKG-Driven {migration_context['migration_type'].value} Plan",
-            description=f"Migration plan for {len(affected_services)} services based on actual EKG analysis",
+            description=f"Migration plan for {len(affected_services)} {'service' if len(affected_services) == 1 else 'services'} based on actual EKG analysis",
             migration_type=migration_context['migration_type'],
             affected_services=affected_services,
             total_estimated_effort=migration_context.get('complexity_level', 'Medium'),
