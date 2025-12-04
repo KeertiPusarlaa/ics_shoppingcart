@@ -1,13 +1,13 @@
 import sqlite3
 from typing import Optional, List
 from textblob import TextBlob
-from openai import OpenAI
+import openai
 import os
 
 class PromptRefinementAgent:
     def __init__(self, db_path: str = "refinement_agent.db"):
         self.db_path = db_path
-        self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.api_key = os.getenv("OPENAI_API_KEY")
         self._initialize_database()
 
     def _initialize_database(self):
@@ -64,7 +64,8 @@ class PromptRefinementAgent:
             preserve_keywords = preserve_keywords or []
             preserve_instruction = "\n".join([f"Preserve the term '{keyword}' exactly as it is." for keyword in preserve_keywords])
 
-            response = self.openai_client.chat.completions.create(
+            response = openai.ChatCompletion.create(
+                api_key=self.api_key,
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are an expert in refining and rephrasing natural language queries. Your task is to rephrase the user's query into a more detailed, specific, and precise version while preserving its original meaning. Use the context of previous similar queries and their refinements stored in the vector database to guide your rephrasing. Ensure the rephrased query is unambiguous and aligned with the user's intent."},
@@ -73,7 +74,7 @@ class PromptRefinementAgent:
                 max_tokens=150,
                 temperature=0.7
             )
-            refined_query = response.choices[0].message.content.strip()
+            refined_query = response['choices'][0]['message']['content'].strip()
         except Exception as e:
             print(f"OpenAI API error: {e}")
             refined_query = corrected_query  # Fallback to the corrected query

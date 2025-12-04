@@ -20,7 +20,7 @@ from ekg_vector_store import EKGVectorStore, EKGSchemaExtractor, create_default_
 from prompt_refinement_agent import PromptRefinementAgent
 
 # LLM integration
-from openai import OpenAI
+import openai
 from neo4j import GraphDatabase
 
 # Migration planning
@@ -142,8 +142,9 @@ class LLMCypherGenerator:
         self.migration_pipeline = MigrationIntelligencePipeline(self.neo4j_driver, self.vector_store)
         
         # OpenAI setup
-        self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
+        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        openai.api_key = self.openai_api_key
+
         # Migration planner
         self.migration_planner = None
 
@@ -405,7 +406,7 @@ Generate the Cypher query:"""
     def _call_openai_with_context(self, context: str, natural_query: str) -> str:
         """Call OpenAI API with comprehensive context and handle errors gracefully."""
         try:
-            response = self.openai_client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": context},
@@ -536,7 +537,7 @@ Generate the migration-focused Cypher query:"""
         """Call OpenAI API with migration-specific context"""
         
         try:
-            response = self.openai_client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4-turbo-preview",
                 messages=[
                     {
