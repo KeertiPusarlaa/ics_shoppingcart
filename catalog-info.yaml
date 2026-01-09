@@ -1,0 +1,13 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ics_shoppingcart
+  description: A shopping cart application developed by KeertiPusarlaa, designed to manage and process online shopping transactions efficiently.
+  annotations:
+    github.com/project-slug: KeertiPusarlaa/ics_shoppingcart
+    jira/project-key: SCRUM
+    jira/label: backstage-component:ics_shoppingcart
+spec:
+  type: application
+  owner: ICS
+  lifecycle: experimental
